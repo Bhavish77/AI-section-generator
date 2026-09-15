@@ -3,24 +3,25 @@ import { SectionNode } from "./types";
 const HERO_LAYOUT: SectionNode = {
   id: "hero-root",
   type: "container",
-  props: { direction: "column" },
+  props: { direction: "column", align: "center", padding: "lg" },
   children: [
     {
       id: "hero-heading",
       type: "heading",
       text: "Build Websites with AI",
-      props: { level: 1 },
+      props: { level: 1, align: "center" },
     },
     {
       id: "hero-paragraph",
       type: "paragraph",
       text: "Describe what you want, and watch it come to life instantly.",
+      props: { align: "center" },
     },
     {
       id: "hero-button",
       type: "button",
       text: "Get Started",
-      props: { variant: "primary" },
+      props: { variant: "primary", size: "lg" },
     },
   ],
 };
@@ -32,36 +33,44 @@ function pricingCard(
   features: string[],
   highlighted = false
 ): SectionNode {
+  const children: SectionNode[] = [];
+
+  if (highlighted) {
+    children.push({ id: `${id}-badge`, type: "badge", text: "Most Popular" });
+  }
+
+  children.push(
+    { id: `${id}-name`, type: "heading", text: name, props: { level: 2, align: "center" } },
+    { id: `${id}-price`, type: "paragraph", text: price, props: { align: "center" } },
+    {
+      id: `${id}-features`,
+      type: "list",
+      children: features.map((f, i) => ({
+        id: `${id}-feature-${i}`,
+        type: "listItem",
+        text: f,
+      })),
+    },
+    {
+      id: `${id}-cta`,
+      type: "button",
+      text: "Choose Plan",
+      props: { variant: highlighted ? "primary" : "outline" },
+    }
+  );
+
   return {
     id: `${id}-card`,
     type: "container",
-    props: { direction: "column", highlighted },
-    children: [
-      { id: `${id}-name`, type: "heading", text: name, props: { level: 2 } },
-      { id: `${id}-price`, type: "paragraph", text: price },
-      {
-        id: `${id}-features`,
-        type: "list",
-        children: features.map((f, i) => ({
-          id: `${id}-feature-${i}`,
-          type: "listItem",
-          text: f,
-        })),
-      },
-      {
-        id: `${id}-cta`,
-        type: "button",
-        text: highlighted ? "Choose Plan" : "Choose Plan",
-        props: { variant: highlighted ? "primary" : "secondary" },
-      },
-    ],
+    props: { direction: "column", align: "center", highlighted, padding: highlighted ? "lg" : "md" },
+    children,
   };
 }
 
 const PRICING_LAYOUT: SectionNode = {
   id: "pricing-root",
   type: "container",
-  props: { direction: "row" },
+  props: { direction: "row", background: "muted" },
   children: [
     pricingCard("starter", "Starter", "$10/mo", [
       "10 Projects",

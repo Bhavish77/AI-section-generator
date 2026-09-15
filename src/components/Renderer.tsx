@@ -1,4 +1,4 @@
-import { SectionNode } from "@/lib/types";
+import { Align, SectionNode } from "@/lib/types";
 
 interface RendererProps {
   node: SectionNode;
@@ -9,6 +9,42 @@ const headingStyles: Record<1 | 2 | 3, string> = {
   1: "text-4xl md:text-5xl font-bold leading-tight tracking-tight",
   2: "text-2xl font-semibold leading-snug",
   3: "text-xl font-semibold leading-snug",
+};
+
+const alignClass: Record<Align, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+
+const itemsClass: Record<"start" | "center" | "end", string> = {
+  start: "items-start",
+  center: "items-center",
+  end: "items-end",
+};
+
+const paddingClass: Record<"sm" | "md" | "lg", string> = {
+  sm: "p-3",
+  md: "p-5",
+  lg: "p-8",
+};
+
+const backgroundClass: Record<"surface" | "muted", string> = {
+  surface: "bg-surface",
+  muted: "bg-background",
+};
+
+const buttonVariantClass: Record<"primary" | "secondary" | "outline" | "ghost", string> = {
+  primary: "bg-primary text-primary-foreground",
+  secondary: "bg-secondary text-secondary-foreground",
+  outline: "border border-primary text-ink bg-transparent",
+  ghost: "text-ink bg-transparent hover:bg-secondary",
+};
+
+const buttonSizeClass: Record<"sm" | "md" | "lg", string> = {
+  sm: "text-xs px-3 py-1.5",
+  md: "text-sm px-5 py-2.5",
+  lg: "text-base px-6 py-3",
 };
 
 /**
@@ -34,7 +70,7 @@ function Editable({
 }) {
   const Wrapper = inline ? "span" : "div";
   return (
-    <Wrapper className={`relative group ${inline ? "inline-block" : ""}`}>
+    <Wrapper className={`relative group ${inline ? "inline-block" : "w-full"}`}>
       <Tag
         className={`${className} rounded-md px-1 -mx-1 outline-none ring-1 ring-transparent transition-shadow group-hover:ring-primary/40 focus:ring-2 focus:ring-primary`}
         contentEditable
@@ -63,8 +99,11 @@ export function Renderer({ node, onEdit }: RendererProps) {
       return (
         <div
           className={[
-            "flex gap-4 p-5 rounded-lg bg-surface",
-            isRow ? "flex-row flex-wrap justify-center items-start" : "flex-col",
+            "flex gap-4 rounded-lg",
+            paddingClass[node.props?.padding ?? "md"],
+            backgroundClass[node.props?.background ?? "surface"],
+            isRow ? "flex-row flex-wrap justify-center" : "flex-col",
+            itemsClass[node.props?.align ?? "start"],
             node.props?.highlighted
               ? "border-2 border-primary shadow-lg"
               : "border border-border",
@@ -82,7 +121,7 @@ export function Renderer({ node, onEdit }: RendererProps) {
       return (
         <Editable
           as={`h${level}` as React.ElementType}
-          className={`text-ink ${headingStyles[level]}`}
+          className={`text-ink w-full ${headingStyles[level]} ${alignClass[node.props?.align ?? "left"]}`}
           id={node.id}
           text={node.text}
           onEdit={onEdit}
@@ -94,7 +133,7 @@ export function Renderer({ node, onEdit }: RendererProps) {
       return (
         <Editable
           as="p"
-          className="text-muted text-base leading-relaxed"
+          className={`text-muted text-base leading-relaxed w-full ${alignClass[node.props?.align ?? "left"]}`}
           id={node.id}
           text={node.text}
           onEdit={onEdit}
@@ -106,10 +145,9 @@ export function Renderer({ node, onEdit }: RendererProps) {
         <button
           type="button"
           className={[
-            "rounded-md px-5 py-2.5 text-sm font-semibold transition-colors",
-            node.props?.variant === "primary"
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-secondary-foreground",
+            "rounded-md font-semibold transition-colors",
+            buttonVariantClass[node.props?.variant ?? "secondary"],
+            buttonSizeClass[node.props?.size ?? "md"],
           ].join(" ")}
         >
           <Editable
@@ -147,6 +185,18 @@ export function Renderer({ node, onEdit }: RendererProps) {
             onEdit={onEdit}
           />
         </li>
+      );
+
+    case "badge":
+      return (
+        <Editable
+          as="span"
+          inline
+          className="rounded-full bg-primary/10 text-primary text-xs font-semibold px-3 py-1"
+          id={node.id}
+          text={node.text}
+          onEdit={onEdit}
+        />
       );
   }
 }

@@ -5,6 +5,7 @@ import { SectionNode } from "./types";
 // a plain type check has no notion of "too big," a schema can enforce one.
 const text = z.string().max(2000);
 const id = z.string().max(200);
+const align = z.enum(["left", "center", "right"]);
 
 export const SectionNodeSchema: z.ZodType<SectionNode> = z.lazy(() =>
   z.discriminatedUnion("type", [
@@ -15,6 +16,9 @@ export const SectionNodeSchema: z.ZodType<SectionNode> = z.lazy(() =>
         .object({
           highlighted: z.boolean().optional(),
           direction: z.enum(["row", "column"]).optional(),
+          align: z.enum(["start", "center", "end"]).optional(),
+          padding: z.enum(["sm", "md", "lg"]).optional(),
+          background: z.enum(["surface", "muted"]).optional(),
         })
         .optional(),
       children: z.array(SectionNodeSchema).max(50),
@@ -24,20 +28,27 @@ export const SectionNodeSchema: z.ZodType<SectionNode> = z.lazy(() =>
       type: z.literal("heading"),
       text,
       props: z
-        .object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() })
+        .object({
+          level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+          align: align.optional(),
+        })
         .optional(),
     }),
     z.object({
       id,
       type: z.literal("paragraph"),
       text,
+      props: z.object({ align: align.optional() }).optional(),
     }),
     z.object({
       id,
       type: z.literal("button"),
       text,
       props: z
-        .object({ variant: z.enum(["primary", "secondary"]).optional() })
+        .object({
+          variant: z.enum(["primary", "secondary", "outline", "ghost"]).optional(),
+          size: z.enum(["sm", "md", "lg"]).optional(),
+        })
         .optional(),
     }),
     z.object({
@@ -48,6 +59,11 @@ export const SectionNodeSchema: z.ZodType<SectionNode> = z.lazy(() =>
     z.object({
       id,
       type: z.literal("listItem"),
+      text,
+    }),
+    z.object({
+      id,
+      type: z.literal("badge"),
       text,
     }),
   ])
