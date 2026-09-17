@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { SectionNode } from "@/lib/types";
 import { Renderer } from "@/components/Renderer";
-import { updateNodeText } from "@/lib/updateTree";
+import { updateNodeProps, updateNodeText } from "@/lib/updateTree";
 
 export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [tree, setTree] = useState<SectionNode | null>(null);
   const [loading, setLoading] = useState(false);
+  const [useRealAI, setUseRealAI] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
     "idle"
   );
@@ -25,6 +27,10 @@ export default function Home() {
     setTree((prev) => (prev ? updateNodeText(prev, id, text) : prev));
   }
 
+  function handlePropsChange(id: string, props: Record<string, unknown>) {
+    setTree((prev) => (prev ? updateNodeProps(prev, id, props) : prev));
+  }
+
   async function handleSave() {
     if (!tree) return;
     setSaveStatus("saving");
@@ -39,14 +45,18 @@ export default function Home() {
 
   async function handleGenerate() {
     setLoading(true);
+    setNotice(null);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, mode: useRealAI ? "real" : "mock" }),
       });
       const data = await res.json();
       setTree(data.tree);
+      if (useRealAI && data.usedMode === "mock") {
+        setNotice(`Gemini unavailable, showing a mock layout instead (${data.fallbackReason}).`);
+      }
     } finally {
       setLoading(false);
     }
@@ -54,7 +64,18 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background p-8">
-      <div className="flex gap-2 max-w-xl mx-auto mb-10">
+      <div className="flex items-center justify-center gap-2 max-w-xl mx-auto mb-3 text-xs text-muted">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useRealAI}
+            onChange={(e) => setUseRealAI(e.target.checked)}
+          />
+          Use real AI (Gemini)
+        </label>
+      </div>
+
+      <div className="flex gap-2 max-w-xl mx-auto mb-3">
         <input
           className="flex-1 border border-border bg-surface text-ink rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
           placeholder='Enter your prompt, e.g. "a pricing section with 3 tiers"'
@@ -83,9 +104,16 @@ export default function Home() {
         </button>
       </div>
 
+      {notice && (
+        <p className="max-w-xl mx-auto mb-7 text-center text-xs text-muted bg-secondary rounded-md px-3 py-2">
+          {notice}
+        </p>
+      )}
+      {!notice && <div className="mb-10" />}
+
       {tree && (
         <div className="max-w-4xl mx-auto bg-surface p-6 rounded-lg border border-border shadow-sm">
-          <Renderer node={tree} onEdit={handleEdit} />
+          <Renderer node={tree} onEdit={handleEdit} onPropsChange={handlePropsChange} />
         </div>
       )}
     </main>

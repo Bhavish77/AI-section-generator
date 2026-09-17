@@ -1,20 +1,57 @@
-import { Align, SectionNode } from "@/lib/types";
+import { Align, SectionNode, Tone, Weight } from "@/lib/types";
 
 interface RendererProps {
   node: SectionNode;
   onEdit: (id: string, text: string) => void;
+  onPropsChange: (id: string, props: Record<string, unknown>) => void;
+  // True when this node is being laid out as one of several row-siblings
+  // (e.g. one of N cards in a row). A node should only stretch to fill its
+  // parent's width when the parent is a column — inside a row, everyone
+  // stretching to 100% width is what causes cards to wrap onto their own
+  // line instead of sitting side by side.
+  parentIsRow?: boolean;
 }
 
-const headingStyles: Record<1 | 2 | 3, string> = {
-  1: "text-4xl md:text-5xl font-bold leading-tight tracking-tight",
-  2: "text-2xl font-semibold leading-snug",
-  3: "text-xl font-semibold leading-snug",
+interface SelectControl {
+  key: string;
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+}
+
+interface ToggleControl {
+  key: string;
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}
+
+const headingSizeStyles: Record<1 | 2 | 3, string> = {
+  1: "text-4xl md:text-5xl leading-tight tracking-tight",
+  2: "text-2xl leading-snug",
+  3: "text-xl leading-snug",
 };
 
 const alignClass: Record<Align, string> = {
   left: "text-left",
   center: "text-center",
   right: "text-right",
+};
+
+const ALIGN_OPTIONS = ["left", "center", "right"] as const;
+
+const toneClass: Record<Tone, string> = {
+  ink: "text-ink",
+  muted: "text-muted",
+  primary: "text-primary",
+  success: "text-success",
+};
+
+const TONE_OPTIONS = ["ink", "muted", "primary", "success"] as const;
+
+const weightClass: Record<Weight, string> = {
+  normal: "font-normal",
+  bold: "font-bold",
 };
 
 const itemsClass: Record<"start" | "center" | "end", string> = {
@@ -41,36 +78,55 @@ const buttonVariantClass: Record<"primary" | "secondary" | "outline" | "ghost", 
   ghost: "text-ink bg-transparent hover:bg-secondary",
 };
 
+const BUTTON_VARIANT_OPTIONS = ["primary", "secondary", "outline", "ghost"] as const;
+
 const buttonSizeClass: Record<"sm" | "md" | "lg", string> = {
   sm: "text-xs px-3 py-1.5",
   md: "text-sm px-5 py-2.5",
   lg: "text-base px-6 py-3",
 };
 
+const BUTTON_SIZE_OPTIONS = ["sm", "md", "lg"] as const;
+
 /**
- * Wraps a text-bearing element with a hover outline + "Click to edit" tooltip.
- * The tooltip is a SIBLING of the contentEditable element, never a child of it —
- * if it were nested inside, its own "Click to edit" text would get swept up into
- * e.currentTarget.textContent on blur and corrupt the saved data.
+ * Wraps a text-bearing element with:
+ *  - a hover outline + "Click to edit" tooltip
+ *  - an optional floating toolbar of per-instance prop controls (toggle
+ *    buttons like Bold, and dropdowns like align/tone), shown only while
+ *    the element is focused/being edited
+ *
+ * The tooltip and the toolbar are SIBLINGS of the contentEditable element,
+ * never children of it — if nested inside, their text/inputs would get swept
+ * up into e.currentTarget.textContent on blur and corrupt the saved data.
  */
 function Editable({
   as: Tag,
   inline = false,
+  fill = true,
   className,
   id,
   text,
   onEdit,
+  selects,
+  toggles,
 }: {
   as: React.ElementType;
   inline?: boolean;
+  fill?: boolean;
   className: string;
   id: string;
   text: string;
   onEdit: (id: string, text: string) => void;
+  selects?: SelectControl[];
+  toggles?: ToggleControl[];
 }) {
   const Wrapper = inline ? "span" : "div";
+  const hasToolbar = (selects && selects.length > 0) || (toggles && toggles.length > 0);
+
   return (
-    <Wrapper className={`relative group ${inline ? "inline-block" : "w-full"}`}>
+    <Wrapper
+      className={`relative group ${inline ? "inline-block" : fill ? "w-full" : ""}`}
+    >
       <Tag
         className={`${className} rounded-md px-1 -mx-1 outline-none ring-1 ring-transparent transition-shadow group-hover:ring-primary/40 focus:ring-2 focus:ring-primary`}
         contentEditable
@@ -81,18 +137,54 @@ function Editable({
       >
         {text}
       </Tag>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-0"
-      >
-        Click to edit
-        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-ink" />
-      </span>
+
+      {hasToolbar ? (
+        <div className="pointer-events-none absolute -top-9 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-ink px-1.5 py-1 opacity-0 shadow-md transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+          {toggles?.map((toggle) => (
+            <button
+              key={toggle.key}
+              type="button"
+              onClick={toggle.onToggle}
+              aria-pressed={toggle.active}
+              className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${
+                toggle.active ? "bg-white/40" : "bg-white/10"
+              }`}
+            >
+              {toggle.label}
+            </button>
+          ))}
+          {selects?.map((control) => (
+            <select
+              key={control.key}
+              value={control.value}
+              onChange={(e) => control.onChange(e.target.value)}
+              className="rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-white outline-none"
+            >
+              {control.options.map((option) => (
+                <option key={option} value={option} className="text-ink">
+                  {option}
+                </option>
+              ))}
+            </select>
+          ))}
+          <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-ink" />
+        </div>
+      ) : (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-0"
+        >
+          Click to edit
+          <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-ink" />
+        </span>
+      )}
     </Wrapper>
   );
 }
 
-export function Renderer({ node, onEdit }: RendererProps) {
+export function Renderer({ node, onEdit, onPropsChange, parentIsRow = false }: RendererProps) {
+  const fill = !parentIsRow;
+
   switch (node.type) {
     case "container": {
       const isRow = node.props?.direction === "row";
@@ -100,6 +192,14 @@ export function Renderer({ node, onEdit }: RendererProps) {
         <div
           className={[
             "flex gap-4 rounded-lg",
+            // A row-child (e.g. one of several cards) has no natural reason
+            // to divide the row's width evenly — without a sizing hint it
+            // just takes whatever width its own content wants, and if 3
+            // such cards don't happen to fit together, they wrap one-per-
+            // line instead of sharing space. flex-1 makes siblings share
+            // the row equally; min-w-60 stops them shrinking past a
+            // sensible floor before wrapping (e.g. on a narrow viewport).
+            parentIsRow ? "flex-1 min-w-52" : fill ? "w-full" : "",
             paddingClass[node.props?.padding ?? "md"],
             backgroundClass[node.props?.background ?? "surface"],
             isRow ? "flex-row flex-wrap justify-center" : "flex-col",
@@ -110,7 +210,13 @@ export function Renderer({ node, onEdit }: RendererProps) {
           ].join(" ")}
         >
           {node.children.map((child) => (
-            <Renderer key={child.id} node={child} onEdit={onEdit} />
+            <Renderer
+              key={child.id}
+              node={child}
+              onEdit={onEdit}
+              onPropsChange={onPropsChange}
+              parentIsRow={isRow}
+            />
           ))}
         </div>
       );
@@ -118,36 +224,107 @@ export function Renderer({ node, onEdit }: RendererProps) {
 
     case "heading": {
       const level = node.props?.level ?? 2;
+      const align = node.props?.align ?? "left";
+      const tone = node.props?.tone ?? "ink";
+      const weight = node.props?.weight ?? "bold";
+      const italic = node.props?.italic ?? false;
       return (
         <Editable
           as={`h${level}` as React.ElementType}
-          className={`text-ink w-full ${headingStyles[level]} ${alignClass[node.props?.align ?? "left"]}`}
+          fill={fill}
+          className={`${fill ? "w-full" : ""} ${headingSizeStyles[level]} ${alignClass[align]} ${toneClass[tone]} ${weightClass[weight]} ${italic ? "italic" : ""}`}
           id={node.id}
           text={node.text}
           onEdit={onEdit}
+          toggles={[
+            {
+              key: "weight",
+              label: "B",
+              active: weight === "bold",
+              onToggle: () =>
+                onPropsChange(node.id, { weight: weight === "bold" ? "normal" : "bold" }),
+            },
+            {
+              key: "italic",
+              label: "I",
+              active: italic,
+              onToggle: () => onPropsChange(node.id, { italic: !italic }),
+            },
+          ]}
+          selects={[
+            {
+              key: "align",
+              value: align,
+              options: ALIGN_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { align: value }),
+            },
+            {
+              key: "tone",
+              value: tone,
+              options: TONE_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { tone: value }),
+            },
+          ]}
         />
       );
     }
 
-    case "paragraph":
+    case "paragraph": {
+      const align = node.props?.align ?? "left";
+      const tone = node.props?.tone ?? "muted";
+      const weight = node.props?.weight ?? "normal";
+      const italic = node.props?.italic ?? false;
       return (
         <Editable
           as="p"
-          className={`text-muted text-base leading-relaxed w-full ${alignClass[node.props?.align ?? "left"]}`}
+          fill={fill}
+          className={`text-base leading-relaxed ${fill ? "w-full" : ""} ${alignClass[align]} ${toneClass[tone]} ${weightClass[weight]} ${italic ? "italic" : ""}`}
           id={node.id}
           text={node.text}
           onEdit={onEdit}
+          toggles={[
+            {
+              key: "weight",
+              label: "B",
+              active: weight === "bold",
+              onToggle: () =>
+                onPropsChange(node.id, { weight: weight === "bold" ? "normal" : "bold" }),
+            },
+            {
+              key: "italic",
+              label: "I",
+              active: italic,
+              onToggle: () => onPropsChange(node.id, { italic: !italic }),
+            },
+          ]}
+          selects={[
+            {
+              key: "align",
+              value: align,
+              options: ALIGN_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { align: value }),
+            },
+            {
+              key: "tone",
+              value: tone,
+              options: TONE_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { tone: value }),
+            },
+          ]}
         />
       );
+    }
 
-    case "button":
+    case "button": {
+      const variant = node.props?.variant ?? "secondary";
+      const size = node.props?.size ?? "md";
       return (
         <button
           type="button"
           className={[
             "rounded-md font-semibold transition-colors",
-            buttonVariantClass[node.props?.variant ?? "secondary"],
-            buttonSizeClass[node.props?.size ?? "md"],
+            buttonVariantClass[variant],
+            buttonSizeClass[size],
           ].join(" ")}
         >
           <Editable
@@ -157,46 +334,121 @@ export function Renderer({ node, onEdit }: RendererProps) {
             id={node.id}
             text={node.text}
             onEdit={onEdit}
+            selects={[
+              {
+                key: "variant",
+                value: variant,
+                options: BUTTON_VARIANT_OPTIONS,
+                onChange: (value) => onPropsChange(node.id, { variant: value }),
+              },
+              {
+                key: "size",
+                value: size,
+                options: BUTTON_SIZE_OPTIONS,
+                onChange: (value) => onPropsChange(node.id, { size: value }),
+              },
+            ]}
           />
         </button>
       );
+    }
 
     case "list":
       return (
-        <ul className="text-left space-y-2 w-full">
+        <ul className={`text-left space-y-2 ${fill ? "w-full" : ""}`}>
           {node.children.map((child) => (
-            <Renderer key={child.id} node={child} onEdit={onEdit} />
+            <Renderer
+              key={child.id}
+              node={child}
+              onEdit={onEdit}
+              onPropsChange={onPropsChange}
+              parentIsRow={false}
+            />
           ))}
         </ul>
       );
 
-    case "listItem":
+    case "listItem": {
+      const tone = node.props?.tone ?? "muted";
+      const weight = node.props?.weight ?? "normal";
+      const italic = node.props?.italic ?? false;
       return (
-        <li className="text-sm text-muted flex gap-2">
+        <li className="text-sm flex gap-2">
           <span aria-hidden className="text-success font-medium">
             ✓
           </span>
           <Editable
             as="span"
             inline
-            className=""
+            className={`${toneClass[tone]} ${weightClass[weight]} ${italic ? "italic" : ""}`}
             id={node.id}
             text={node.text}
             onEdit={onEdit}
+            toggles={[
+              {
+                key: "weight",
+                label: "B",
+                active: weight === "bold",
+                onToggle: () =>
+                  onPropsChange(node.id, { weight: weight === "bold" ? "normal" : "bold" }),
+              },
+              {
+                key: "italic",
+                label: "I",
+                active: italic,
+                onToggle: () => onPropsChange(node.id, { italic: !italic }),
+              },
+            ]}
+            selects={[
+              {
+                key: "tone",
+                value: tone,
+                options: TONE_OPTIONS,
+                onChange: (value) => onPropsChange(node.id, { tone: value }),
+              },
+            ]}
           />
         </li>
       );
+    }
 
-    case "badge":
+    case "badge": {
+      const tone = node.props?.tone ?? "primary";
+      const weight = node.props?.weight ?? "bold";
+      const italic = node.props?.italic ?? false;
       return (
         <Editable
           as="span"
           inline
-          className="rounded-full bg-primary/10 text-primary text-xs font-semibold px-3 py-1"
+          className={`rounded-full bg-primary/10 text-xs px-3 py-1 ${toneClass[tone]} ${weightClass[weight]} ${italic ? "italic" : ""}`}
           id={node.id}
           text={node.text}
           onEdit={onEdit}
+          toggles={[
+            {
+              key: "weight",
+              label: "B",
+              active: weight === "bold",
+              onToggle: () =>
+                onPropsChange(node.id, { weight: weight === "bold" ? "normal" : "bold" }),
+            },
+            {
+              key: "italic",
+              label: "I",
+              active: italic,
+              onToggle: () => onPropsChange(node.id, { italic: !italic }),
+            },
+          ]}
+          selects={[
+            {
+              key: "tone",
+              value: tone,
+              options: TONE_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { tone: value }),
+            },
+          ]}
         />
       );
+    }
   }
 }

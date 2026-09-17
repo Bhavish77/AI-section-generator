@@ -1,4 +1,6 @@
 export type Align = "left" | "center" | "right";
+export type Tone = "ink" | "muted" | "primary" | "success";
+export type Weight = "normal" | "bold";
 
 export type SectionNode =
   | {
@@ -17,13 +19,19 @@ export type SectionNode =
       id: string;
       type: "heading";
       text: string;
-      props?: { level?: 1 | 2 | 3; align?: Align };
+      props?: {
+        level?: 1 | 2 | 3;
+        align?: Align;
+        tone?: Tone;
+        weight?: Weight;
+        italic?: boolean;
+      };
     }
   | {
       id: string;
       type: "paragraph";
       text: string;
-      props?: { align?: Align };
+      props?: { align?: Align; tone?: Tone; weight?: Weight; italic?: boolean };
     }
   | {
       id: string;
@@ -43,9 +51,11 @@ export type SectionNode =
       id: string;
       type: "listItem";
       text: string;
+      props?: { tone?: Tone; weight?: Weight; italic?: boolean };
     }
   | {
       id: string;
       type: "badge";
       text: string;
+      props?: { tone?: Tone; weight?: Weight; italic?: boolean };
     };
