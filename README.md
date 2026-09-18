@@ -5,8 +5,7 @@ Gemini integration) that returns a structured JSON tree, a generic renderer that
 turns that tree into UI without any per-layout components, click-to-edit inline
 editing, and mock persistence.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical writeup and
-`docs/` for deep-dive notes on specific problems.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical writeup.
 
 ## 1. Local setup
 
