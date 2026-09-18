@@ -233,6 +233,89 @@ exact error messages and JSON from the Attempt 1 failures above.
   cost per generation than the original one-call idea — acceptable here
   because reliability and consistency mattered more than round-trip count.
 
+### Alternate schema considered: flat nodes + `parentId` (tested, not adopted)
+
+After landing on the plan→per-group→per-card pipeline above, we tested one
+more idea: instead of the recursive `SectionNode` tree, ask for a **flat**
+array of nodes — `{id, type, parentId, text}`, connected only by each
+node's `parentId` string pointing at its parent's `id` — plus one shared
+`theme` object, all in a **single** call. No `children: SectionNode[]`
+anywhere, so no self-reference at all. Code (not the codebase's real
+pipeline — a standalone experiment in `src/lib/experiments/`) then
+reassembles the flat list into a real tree and applies `theme`
+deterministically, the same way `buildFieldNode` does in the real
+pipeline.
+
+**What this fixed completely:** every schema-validity error from Attempt 1
+("too many states for serving," the cyclic-`$ref` issue) is structurally
+impossible here — there's no recursion for any of those problems to
+attach to. Tested live for "a pricing section with 3 tiers": 1 call, 16
+flat nodes, all 3 cards complete and identical in shape, valid against the
+real `SectionNodeSchema` — matching what the real 4-call pipeline achieves,
+in a quarter of the calls.
+
+A real, unedited response from that test (trimmed to the root + one card —
+the other two cards repeat the exact same shape):
+```json
+{
+  "theme": {
+    "titleTone": "ink", "titleWeight": "bold",
+    "metaTone": "muted", "bodyTone": "muted",
+    "quoteTone": "ink", "quoteItalic": false,
+    "ctaVariantHighlighted": "primary", "ctaVariantDefault": "outline"
+  },
+  "nodes": [
+    { "id": "pricing-section", "type": "container", "parentId": null, "direction": "row" },
+
+    { "id": "tier-pro", "type": "container", "parentId": "pricing-section", "direction": "column", "highlighted": true },
+    { "id": "tier-pro-heading", "type": "heading", "parentId": "tier-pro", "text": "Professional" },
+    { "id": "tier-pro-meta", "type": "paragraph", "parentId": "tier-pro", "text": "$29 / month", "role": "meta" },
+    { "id": "tier-pro-body", "type": "paragraph", "parentId": "tier-pro", "text": "Advanced tools and priority support for growing teams and businesses.", "role": "body" },
+    { "id": "tier-pro-button", "type": "button", "parentId": "tier-pro", "text": "Choose Professional" }
+
+    // ...tier-starter and tier-enterprise follow, same 5-node shape each
+  ]
+}
+```
+Every leaf node connects to its card purely via the string `parentId` — no
+nesting anywhere in the JSON itself, even though the *result*, once
+assembled, is a real tree three levels deep.
+
+**What it did NOT fix, tested live at 5 tiers:** the response validated
+successfully, but one of the five cards (`tier-enterprise`) was **missing
+its button** — 3 children instead of every other card's 4. Schema
+validation had no way to catch this (a container just needs `≥1` child),
+so this would have shipped to a user as a silently incomplete card. This
+is the same "one call, several independent items, one gets dropped"
+failure mode that motivated decomposing into per-card calls in the first
+place — flattening the *schema shape* solved the JSON-validity axis of the
+problem entirely, but not the separate *model reliability at handling
+several independent things in one pass* axis. Arguably a worse failure
+mode than the original JSON errors, since a schema error is loud and
+already triggers our retry loop automatically; a quietly-incomplete-but-
+technically-valid card does not.
+
+**A genuinely new finding from testing this, worth its own note:** the
+"too many states for serving" class of limit is not specific to recursive
+schemas, and not even scoped to one array in isolation. Bisecting against
+the live API showed it's a **total-schema complexity budget** — the exact
+same flat `nodes` array and `maxItems` value that passed fine on its own
+started failing once a sibling `theme` object (its own 8 enum-heavy
+fields) was added to the same request schema. Every enum-bearing field
+anywhere in a schema eats into one shared ceiling, not a per-field or
+per-array one.
+
+- **Benefit:** roughly a quarter of the calls for the same content, and an
+  entire category of error (recursive-schema failures) eliminated by
+  construction rather than mitigated with retries.
+- **Tradeoff / why not adopted:** the bulk-item reliability risk that
+  justified the per-card architecture is still present, just relocated
+  from a loud, auto-retried JSON error into a silent content gap our
+  current validation can't detect. Fixing that would need real work (e.g.
+  validating each card group has a consistent, complete set of child types
+  before accepting a response) that doesn't exist yet — documented here as
+  a tested, credible alternative, not a drop-in replacement.
+
 ### Reliability: retries and graceful degradation, not all-or-nothing
 
 - Every individual Gemini call retries once with the validation error fed
