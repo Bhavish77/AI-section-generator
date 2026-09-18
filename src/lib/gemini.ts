@@ -36,21 +36,29 @@ function toGeminiSchema(zodSchema: z.ZodType): unknown {
   const schema = toJSONSchema(zodSchema) as Record<string, unknown>;
   delete schema.$schema;
 
-  function relax(node: unknown): void {
+  // keyName tracks the property name we arrived through, so the maxItems/
+  // minItems relaxation below applies ONLY to the recursive "children"
+  // field (the one that actually causes "too many states for serving") —
+  // not to every array anywhere in the schema, e.g. PlanGroupSchema's flat
+  // (non-recursive) "items" array keeps its real .max(6) when sent to
+  // Gemini instead of being silently capped to 4 along with it.
+  function relax(node: unknown, keyName?: string): void {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
-      node.forEach(relax);
+      node.forEach((item) => relax(item, keyName));
       return;
     }
     const obj = node as Record<string, unknown>;
     if (Array.isArray(obj.required)) {
       obj.required = (obj.required as string[]).filter((field) => field !== "children");
     }
-    if (typeof obj.maxItems === "number") {
-      obj.maxItems = MAX_ITEMS_FOR_GENERATION;
+    if (keyName === "children") {
+      if (typeof obj.maxItems === "number") {
+        obj.maxItems = MAX_ITEMS_FOR_GENERATION;
+      }
+      delete obj.minItems;
     }
-    delete obj.minItems;
-    Object.values(obj).forEach(relax);
+    Object.entries(obj).forEach(([key, value]) => relax(value, key));
   }
 
   relax(schema);
