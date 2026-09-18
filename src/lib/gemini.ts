@@ -466,6 +466,27 @@ export async function generateWithGemini(prompt: string): Promise<GeminiResult> 
 
     // planResult: { ok: true; data: Plan } | { ok: false; reason: string; issueSummary?: string }
     // (CallOutcome<Plan> — already zod-validated against PlanSchema inside callGeminiJSON)
+    //
+    // planResult.data (the Plan object), e.g. for "a pricing section with 3 tiers":
+    // {
+    //   heading: "Simple, Transparent Pricing",
+    //   headingLevel: 2,
+    //   subtitle: "Choose the plan that fits your team.",
+    //   theme: {
+    //     titleTone: "ink", titleWeight: "bold",
+    //     metaTone: "muted", bodyTone: "muted",
+    //     quoteTone: "ink", quoteItalic: true,
+    //     ctaVariantHighlighted: "primary", ctaVariantDefault: "outline",
+    //   },
+    //   groups: [
+    //     {
+    //       id: "pricing-tiers", layout: "row", itemKind: "card",
+    //       items: ["Starter plan", "Pro plan", "Enterprise plan"],
+    //       fields: ["title", "meta", "body", "cta"],
+    //       highlightedIndex: 1,
+    //     },
+    //   ],
+    // }
     const planResult = await callWithRetry<Plan>(
       ai,
       PlanSchema,
@@ -497,6 +518,29 @@ export async function generateWithGemini(prompt: string): Promise<GeminiResult> 
     //   one entry per plan.groups[i], same order, e.g. for our 1-group
     //   pricing example:
     //   [ { status: "fulfilled", value: [StarterCard, ProCard, EnterpriseCard] } ]
+    //
+    //   where each *Card is itself a full SectionNode container, e.g.:
+    //   ProCard = {
+    //     id: "pricing-tiers-1", type: "container",
+    //     props: { direction: "column", align: "start", padding: "lg",
+    //               background: "surface", highlighted: true },
+    //     children: [
+    //       { id: "pricing-tiers-1-title-0", type: "heading", text: "Pro",
+    //         props: { level: 3, tone: "ink", weight: "bold" } },
+    //       { id: "pricing-tiers-1-meta-1", type: "paragraph",
+    //         text: "For growing teams and businesses", props: { tone: "muted" } },
+    //       { id: "pricing-tiers-1-body-2", type: "paragraph",
+    //         text: "Unlock advanced features and priority support...", props: { tone: "muted" } },
+    //       { id: "pricing-tiers-1-cta-3", type: "button",
+    //         text: "Start Pro Trial", props: { variant: "primary" } },
+    //     ],
+    //   }
+    //   StarterCard/EnterpriseCard have the exact same shape, just built from
+    //   different text and with isHighlighted=false, so their container props
+    //   differ only in padding:"md" (not "lg") and highlighted:false (not
+    //   true), and their cta uses theme.ctaVariantDefault ("outline") instead
+    //   of theme.ctaVariantHighlighted ("primary") — see buildFieldNode.
+    //
     //   — or, if that group's own generateGroupItems threw before finishing:
     //   [ { status: "rejected", reason: <Error> } ]
     //   — or, if it finished but every card inside it failed:
