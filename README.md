@@ -76,9 +76,12 @@ input that TypeScript's compile-time types can't protect against.
 ### Mock backend: keyword-matched layouts
 
 `generateLayout(prompt)` in `layouts.ts` does simple keyword matching
-(e.g. "pricing"/"tier" → `PRICING_LAYOUT`, else → `HERO_LAYOUT`) and returns
-one of two predefined `SectionNode` trees. This satisfies the assignment's
-"≥2 layouts, matched by keyword" requirement without any real AI call.
+(the literal word "pricing" → `PRICING_LAYOUT`, else → `HERO_LAYOUT`) and
+returns one of two predefined `SectionNode` trees. This satisfies the
+assignment's "≥2 layouts, matched by keyword" requirement without any real
+AI call. Note this is a literal substring check, not a synonym list — a
+prompt like "3 tiers" with no occurrence of the word "pricing" falls
+through to the hero layout.
 
 - **Benefit:** instant, free, deterministic — good for testing the
   rendering/editing pipeline without depending on an external API.

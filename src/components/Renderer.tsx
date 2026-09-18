@@ -109,6 +109,7 @@ function Editable({
   onEdit,
   selects,
   toggles,
+  wrapTag,
 }: {
   as: React.ElementType;
   inline?: boolean;
@@ -119,24 +120,34 @@ function Editable({
   onEdit: (id: string, text: string) => void;
   selects?: SelectControl[];
   toggles?: ToggleControl[];
+  // Wraps ONLY the contentEditable element itself (e.g. in a real <button>)
+  // — never the toolbar. Interactive elements (<select>, <button>) can't be
+  // nested inside another interactive element like <button> per the HTML
+  // content model, so the toolbar must stay a sibling of whatever this
+  // wraps, not a descendant of it.
+  wrapTag?: (children: React.ReactNode) => React.ReactNode;
 }) {
   const Wrapper = inline ? "span" : "div";
   const hasToolbar = (selects && selects.length > 0) || (toggles && toggles.length > 0);
+
+  const editableTag = (
+    <Tag
+      className={`${className} rounded-md px-1 -mx-1 outline-none ring-1 ring-transparent transition-shadow group-hover:ring-primary/40 focus:ring-2 focus:ring-primary`}
+      contentEditable
+      suppressContentEditableWarning
+      onBlur={(e: React.FocusEvent<HTMLElement>) =>
+        onEdit(id, e.currentTarget.textContent ?? "")
+      }
+    >
+      {text}
+    </Tag>
+  );
 
   return (
     <Wrapper
       className={`relative group ${inline ? "inline-block" : fill ? "w-full" : ""}`}
     >
-      <Tag
-        className={`${className} rounded-md px-1 -mx-1 outline-none ring-1 ring-transparent transition-shadow group-hover:ring-primary/40 focus:ring-2 focus:ring-primary`}
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={(e: React.FocusEvent<HTMLElement>) =>
-          onEdit(id, e.currentTarget.textContent ?? "")
-        }
-      >
-        {text}
-      </Tag>
+      {wrapTag ? wrapTag(editableTag) : editableTag}
 
       {hasToolbar ? (
         <div className="pointer-events-none absolute -top-9 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-ink px-1.5 py-1 opacity-0 shadow-md transition-opacity duration-150 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
@@ -319,37 +330,44 @@ export function Renderer({ node, onEdit, onPropsChange, parentIsRow = false }: R
       const variant = node.props?.variant ?? "secondary";
       const size = node.props?.size ?? "md";
       return (
-        <button
-          type="button"
-          className={[
-            "rounded-md font-semibold transition-colors",
-            buttonVariantClass[variant],
-            buttonSizeClass[size],
-          ].join(" ")}
-        >
-          <Editable
-            as="span"
-            inline
-            className=""
-            id={node.id}
-            text={node.text}
-            onEdit={onEdit}
-            selects={[
-              {
-                key: "variant",
-                value: variant,
-                options: BUTTON_VARIANT_OPTIONS,
-                onChange: (value) => onPropsChange(node.id, { variant: value }),
-              },
-              {
-                key: "size",
-                value: size,
-                options: BUTTON_SIZE_OPTIONS,
-                onChange: (value) => onPropsChange(node.id, { size: value }),
-              },
-            ]}
-          />
-        </button>
+        <Editable
+          as="span"
+          inline
+          className=""
+          id={node.id}
+          text={node.text}
+          onEdit={onEdit}
+          // The <button> wraps only the contentEditable span — the toolbar
+          // (rendered by Editable itself, as a sibling of whatever wrapTag
+          // returns) stays outside it, so its <select>s are never nested
+          // inside a <button> (invalid HTML content model otherwise).
+          wrapTag={(child) => (
+            <button
+              type="button"
+              className={[
+                "rounded-md font-semibold transition-colors",
+                buttonVariantClass[variant],
+                buttonSizeClass[size],
+              ].join(" ")}
+            >
+              {child}
+            </button>
+          )}
+          selects={[
+            {
+              key: "variant",
+              value: variant,
+              options: BUTTON_VARIANT_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { variant: value }),
+            },
+            {
+              key: "size",
+              value: size,
+              options: BUTTON_SIZE_OPTIONS,
+              onChange: (value) => onPropsChange(node.id, { size: value }),
+            },
+          ]}
+        />
       );
     }
 
