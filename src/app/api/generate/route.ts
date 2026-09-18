@@ -2,9 +2,15 @@ import { generateLayout } from "@/lib/layouts";
 import { generateWithGemini, isFailure } from "@/lib/gemini";
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const prompt = body.prompt;
-  const mode = body.mode === "real" ? "real" : "mock";
+  let body: { prompt?: unknown; mode?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
+  }
+
+  const prompt = body?.prompt;
+  const mode = body?.mode === "real" ? "real" : "mock";
 
   if (!prompt || typeof prompt !== "string") {
     return Response.json(

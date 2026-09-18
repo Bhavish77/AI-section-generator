@@ -76,10 +76,14 @@ type CallOutcome<T> =
   | { ok: true; data: T }
   | { ok: false; reason: string; issueSummary?: string };
 
-// TypeScript can fail to narrow a discriminated union when the value comes
-// from awaiting an external (generic) function call — confirmed by isolated
-// repro — even though the exact same object literal narrows fine inline.
-// An explicit type-predicate sidesteps that limitation reliably.
+// This project's tsconfig.json has "strict": false (no strictNullChecks),
+// and under that setting TypeScript's control-flow narrowing for
+// discriminated unions via early-return (`if (x.ok) return; ...x.reason`)
+// does not reliably work — confirmed with a minimal, fully synchronous,
+// non-generic repro (isolated with --strictNullChecks vs without it). This
+// is NOT specific to generic or awaited values, as earlier testing here
+// suggested — it affects any such narrowing anywhere in this codebase. An
+// explicit type-predicate sidesteps it reliably regardless of strict mode.
 export function isFailure<T extends { ok: boolean }>(
   result: T
 ): result is Extract<T, { ok: false }> {
